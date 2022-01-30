@@ -1,21 +1,24 @@
+// Author: Jake Edwards
+// For: Composable Questionaire
+// Problem #1 and #2
+
 mod bytecode;
-// mod opcode;
 
 use bytecode::*;
-// use opcode::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
 fn main() {
-    // 1. Fetch - Read an opcode from `opcodes_string`
-    // 2. Decode - Create ByteCode object from opcode and load to memory (represented as mem vector)
-    // 3. Execute - Execute instruction in interpreter loop
+    // 1. Fetch - Read an opcode from `mem`
+    // 2. Decode - Figure out which kind of ByteCode the instruction is
+    // 3. Execute - Execute instruction
 
     // This functions as the hard-disk. Read from hard-disk into memory (mem)
     let opcodes_string = read_file("bytecode_loop.txt");
 
+    // Stores function instructions
     let mut mem: Vec<ByteCode> = vec![];
     load_memory(&mut mem, opcodes_string);
 
@@ -24,7 +27,11 @@ fn main() {
     // Program is loaded in memory
     // Now run program...
 
-    let mut stack: Vec<usize> = vec![];
+    // Stack for some operand values and computation
+    let mut op_stack: Vec<usize> = vec![];
+
+    // Stack for storing local variables
+    let mut local_stack: Vec<usize> = vec![];
 
     // `var_map` only necessary because opcodes accept char names for variables instead of just using memory address (vector index)
     let mut var_map: HashMap<char, usize> = HashMap::new();
@@ -33,61 +40,72 @@ fn main() {
     // Interpreter
     while program_counter < mem.len() {
         println!("Program Counter: {}", program_counter);
-        println!("Stack: {:?}", stack);
+        println!("op_stack: {:?}", op_stack);
+        println!("local_stack: {:?}\n", local_stack);
+
         let opcode = &mem[program_counter];
         match opcode {
+            // Push `num` onto the `op_stack`
             ByteCode::LoadVal(num) => {
-                stack.push(*num);
+                op_stack.push(*num);
             }
+            // Assumes value to be written is top item in `op_stack`
             ByteCode::WriteVar(var_name) => {
-                // Reference top value in stack as `x`
-                if var_map.contains_key(&var_name) {
-                    let val = stack.pop();
-                    match var_map.get(&var_name) {
-                        Some(index) => stack[*index] = val.unwrap(),
-                        None => panic!("Shouldn't happen"),
+                // Pop top value from `op_stack` and store in `local_stack` with lookup index from `var_map`
+                match op_stack.pop() {
+                    Some(val) => {
+                        if var_map.contains_key(&var_name) {
+                            match var_map.get(&var_name) {
+                                Some(index) => local_stack[*index] = val,
+                                None => panic!("Shouldn't happen"),
+                            }
+                        } else {
+                            local_stack.push(val);
+                            var_map.insert(*var_name, local_stack.len() - 1);
+                        }
                     }
-                } else {
-                    var_map.insert(*var_name, stack.len() - 1);
+                    None => panic!("If this runs, bytecode is incorrect"),
                 }
             }
+            // Reads value from `local_stack` and pushes to `op_stack`
             ByteCode::ReadVar(var_name) => match var_map.get(&var_name) {
                 Some(index) => {
-                    let value = stack[*index];
-                    stack.push(value);
+                    let value = local_stack[*index];
+                    op_stack.push(value);
                 }
-                None => panic!("Cannot read un-declared variable!"),
+                None => panic!("Cannot read non-existant variable!"),
             },
             ByteCode::Add => {
-                let num1 = pop_from_stack(&mut stack);
-                let num2 = pop_from_stack(&mut stack);
+                let num1 = pop_from_stack(&mut op_stack);
+                let num2 = pop_from_stack(&mut op_stack);
 
-                stack.push(num1 + num2);
+                op_stack.push(num1 + num2);
             }
             ByteCode::Subtract => {
-                let num1 = pop_from_stack(&mut stack);
-                let num2 = pop_from_stack(&mut stack);
+                let num1 = pop_from_stack(&mut op_stack);
+                let num2 = pop_from_stack(&mut op_stack);
 
-                // Randomly chose ordering here. Would need to define a convention for order of pushing numbers to stack before MULTIPLY opcode.
-                stack.push(num1 - num2);
+                // Randomly chose ordering here. Would need to define a convention for order of pushing numbers to op_stack before MULTIPLY opcode.
+                op_stack.push(num2 - num1);
             }
             ByteCode::Multiply => {
-                let num1 = pop_from_stack(&mut stack);
-                let num2 = pop_from_stack(&mut stack);
+                let num1 = pop_from_stack(&mut op_stack);
+                let num2 = pop_from_stack(&mut op_stack);
 
-                stack.push(num1 * num2);
+                op_stack.push(num2 * num1);
             }
             ByteCode::Divide => {
-                let num1 = pop_from_stack(&mut stack);
-                let num2 = pop_from_stack(&mut stack);
+                let num1 = pop_from_stack(&mut op_stack);
+                let num2 = pop_from_stack(&mut op_stack);
 
-                // Randomly chose ordering here. Would need to define a convention for order of pushing numbers to stack before DIVIDE opcode.
-                stack.push(num1 / num2);
+                // Randomly chose ordering here. Would need to define a convention for order of pushing numbers to op_stack before DIVIDE opcode.
+                op_stack.push(num2 / num1);
             }
             ByteCode::ReturnValue => {
-                let final_num = pop_from_stack(&mut stack);
-                println!("Final value is {}", final_num);
+                let final_num = pop_from_stack(&mut op_stack);
+                println!("FINAL VALUE: {}", final_num);
             }
+            // If `var1` is less than `var2` decrement `program_counter` to index of desired instruction in `mem`
             ByteCode::DoWhileLt((var1, var2, loop_beginning)) => {
                 println!("DO_WHILE_LT called");
                 let index1: usize;
@@ -102,10 +120,8 @@ fn main() {
                     None => panic!("Couldn't get index!"),
                 }
 
-                let mut i: usize = 0; // counter
-                let mut m: usize = 1; // max
-                i = stack[index1]; // counter
-                m = stack[index2]; // max
+                let i: usize = local_stack[index1]; // counter
+                let m: usize = local_stack[index2]; // max
 
                 if i < m {
                     println!("i: {}, m: {}, loop_beginning: {}", i, m, loop_beginning);
@@ -115,13 +131,10 @@ fn main() {
         }
         program_counter = program_counter + 1;
     }
-    println!("{:?}", stack);
-
-    // Program end: clean up stack
-    stack.clear();
-    println!("{:?}", stack);
+    println!("op_stack: {:?}", op_stack);
 }
 
+/// Given a mutable reference to a Vec<usize>, pop the top element from `stack` and return it.
 fn pop_from_stack(stack: &mut Vec<usize>) -> usize {
     match stack.pop() {
         Some(num) => return num,
@@ -129,6 +142,7 @@ fn pop_from_stack(stack: &mut Vec<usize>) -> usize {
     }
 }
 
+/// Given a path to a text file, read the contents of the file, write them to String `s` and return `s`.
 fn read_file(file_path: &str) -> String {
     let path = Path::new(file_path);
     let display = path.display();
@@ -146,6 +160,7 @@ fn read_file(file_path: &str) -> String {
     }
 }
 
+/// Given a String of instructions, for each opcode in `opcodes_string` create the corresponding `ByteCode` type and push it onto the `mem` stack.
 fn load_memory(mem: &mut Vec<ByteCode>, opcodes_string: String) {
     for opcode in opcodes_string.lines() {
         let s_arr: Vec<&str> = opcode.split_whitespace().collect();

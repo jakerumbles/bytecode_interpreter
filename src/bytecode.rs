@@ -1,5 +1,4 @@
-// use crate::opcode;
-use std::fmt;
+// use std::fmt;
 
 #[derive(Debug)]
 pub enum ByteCode {
@@ -13,15 +12,6 @@ pub enum ByteCode {
     DoWhileLt((char, char, usize)),
     ReturnValue,
 }
-
-// impl ByteCode {
-//     pub fn new(instruction: String, operand: Option<String>) -> ByteCode {
-//         ByteCode {
-//             instruction,
-//             operand,
-//         }
-//     }
-// }
 
 // impl fmt::Display for ByteCode {
 //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

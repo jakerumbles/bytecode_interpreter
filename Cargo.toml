@@ -1,5 +1,6 @@
 [package]
 name = "bytecode_interpreter"
+author = "Jake Edwards"
 version = "0.1.0"
 edition = "2021"
 
