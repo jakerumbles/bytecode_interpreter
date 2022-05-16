@@ -1,7 +1,3 @@
-// Author: Jake Edwards
-// For: Composable Questionaire
-// Problem #1 and #2
-
 mod bytecode;
 
 use bytecode::*;
